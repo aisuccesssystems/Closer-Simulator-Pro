@@ -1,0 +1,121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  background: #0a0a0a;
+  color: #fff;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #FF1B1B;
+  border-radius: 999px;
+}
+
+/* Mic pulse glow — listening state */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 27, 27, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 30px 12px rgba(255, 27, 27, 0.4);
+  }
+}
+.mic-pulse {
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+/* Sound wave bars — listening state */
+@keyframes wave-bar {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+.wave-bar {
+  display: inline-block;
+  width: 3px;
+  height: 20px;
+  margin: 0 2px;
+  border-radius: 2px;
+  background: #FF1B1B;
+  animation: wave-bar 0.8s ease-in-out infinite;
+}
+.wave-bar:nth-child(2) { animation-delay: 0.1s; }
+.wave-bar:nth-child(3) { animation-delay: 0.2s; }
+.wave-bar:nth-child(4) { animation-delay: 0.3s; }
+.wave-bar:nth-child(5) { animation-delay: 0.15s; }
+
+/* Speaker wave — speaking state */
+@keyframes speaker-wave {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+.speaker-wave {
+  animation: speaker-wave 1s ease-in-out infinite;
+}
+.speaker-wave:nth-child(2) { animation-delay: 0.2s; }
+.speaker-wave:nth-child(3) { animation-delay: 0.4s; }
+
+/* Spinner — processing state */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.spinner {
+  border: 3px solid #444;
+  border-top: 3px solid #FF1B1B;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Score count-up number */
+@keyframes count-fade-in {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
+}
+.score-appear {
+  animation: count-fade-in 0.6s ease-out forwards;
+}
+
+/* Score bar fill */
+@keyframes bar-fill {
+  from { width: 0%; }
+}
+.bar-animate {
+  animation: bar-fill 1s ease-out forwards;
+}
+
+/* Fade in up for cards */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up {
+  animation: fade-in-up 0.5s ease-out forwards;
+  opacity: 0;
+}
+
+/* Difficulty modal backdrop */
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+}
