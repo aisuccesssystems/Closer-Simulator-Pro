@@ -338,12 +338,18 @@ export default function HomePage() {
 
   // ─── SPEECH RECOGNITION ───
   const listeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTranscriptRef = useRef<string>('');
+  const isMobileRef = useRef(false);
 
-  const clearTimers = useCallback(() => {
+  useEffect(() => {
+    isMobileRef.current = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  }, []);
+
+  const stopListening = useCallback(() => {
     if (listeningTimeoutRef.current) { clearTimeout(listeningTimeoutRef.current); listeningTimeoutRef.current = null; }
-    if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+    }
   }, []);
 
   const startListening = useCallback(() => {
@@ -352,7 +358,7 @@ export default function HomePage() {
       try { recognitionRef.current.abort(); } catch {}
       recognitionRef.current = null;
     }
-    clearTimers();
+    if (listeningTimeoutRef.current) { clearTimeout(listeningTimeoutRef.current); listeningTimeoutRef.current = null; }
     lastTranscriptRef.current = '';
 
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -369,14 +375,13 @@ export default function HomePage() {
 
     recognition.onstart = () => {
       setVoiceState('listening');
-      // Safety timeout — if listening hangs for 20s total, force stop
+      // Safety timeout
       listeningTimeoutRef.current = setTimeout(() => {
         try { recognition.stop(); } catch {}
-      }, 20000);
+      }, 30000);
     };
 
     recognition.onresult = (event: any) => {
-      // Collect all transcripts
       let finalTranscript = '';
       let interimTranscript = '';
       for (let i = 0; i < event.results.length; i++) {
@@ -387,28 +392,21 @@ export default function HomePage() {
           interimTranscript += result[0].transcript;
         }
       }
-
       lastTranscriptRef.current = finalTranscript || interimTranscript;
 
-      // If we got a final result, stop immediately and send
-      if (finalTranscript) {
-        clearTimers();
+      // On desktop (Chrome), final results auto-fire — send immediately
+      if (finalTranscript && !isMobileRef.current) {
+        if (listeningTimeoutRef.current) { clearTimeout(listeningTimeoutRef.current); listeningTimeoutRef.current = null; }
         try { recognition.stop(); } catch {}
         if (scenarioRef.current) {
           postChatAndSpeak(finalTranscript.trim(), messagesRef.current, scenarioRef.current);
         }
-        return;
       }
-
-      // For interim results, reset silence timer — stop after 2s of no new speech
-      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
-      silenceTimeoutRef.current = setTimeout(() => {
-        try { recognition.stop(); } catch {}
-      }, 2000);
+      // On mobile, user taps mic again to stop (handled in stopAndSend)
     };
 
     recognition.onerror = (event: any) => {
-      clearTimers();
+      if (listeningTimeoutRef.current) { clearTimeout(listeningTimeoutRef.current); listeningTimeoutRef.current = null; }
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
         setError(`Mic error: ${event.error}`);
       }
@@ -416,10 +414,10 @@ export default function HomePage() {
     };
 
     recognition.onend = () => {
-      clearTimers();
-      // If we have an unsubmitted transcript (from interim results), send it
+      if (listeningTimeoutRef.current) { clearTimeout(listeningTimeoutRef.current); listeningTimeoutRef.current = null; }
+      // If desktop and there's a pending transcript, send it
       const pending = lastTranscriptRef.current.trim();
-      if (pending && scenarioRef.current) {
+      if (pending && scenarioRef.current && !isMobileRef.current) {
         lastTranscriptRef.current = '';
         postChatAndSpeak(pending, messagesRef.current, scenarioRef.current);
       } else {
@@ -432,10 +430,26 @@ export default function HomePage() {
     } catch {
       setVoiceState('idle');
     }
-  }, [postChatAndSpeak, clearTimers]);
+  }, [postChatAndSpeak]);
 
-  // ─── AUTO-LISTEN after speaking ───
+  // Mobile: tap mic again to stop listening and send
+  const stopAndSend = useCallback(() => {
+    if (listeningTimeoutRef.current) { clearTimeout(listeningTimeoutRef.current); listeningTimeoutRef.current = null; }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+    }
+    const pending = lastTranscriptRef.current.trim();
+    if (pending && scenarioRef.current) {
+      lastTranscriptRef.current = '';
+      postChatAndSpeak(pending, messagesRef.current, scenarioRef.current);
+    } else {
+      setVoiceState('idle');
+    }
+  }, [postChatAndSpeak]);
+
+  // ─── AUTO-LISTEN after speaking (desktop only) ───
   useEffect(() => {
+    if (isMobileRef.current) return; // Skip auto-listen on mobile — user taps mic
     if (voiceState === 'idle' && autoListenRef.current && scenario && !showScoreCard && messages.length > 1) {
       const hasUserMessages = messages.some((m) => m.role === 'user');
       if (hasUserMessages) {
@@ -596,7 +610,7 @@ export default function HomePage() {
 
   const micLabel = {
     idle: 'Tap to speak',
-    listening: 'Listening...',
+    listening: 'Listening... tap to send',
     processing: 'Prospect thinking...',
     speaking: 'Prospect speaking...',
   }[voiceState];
@@ -812,8 +826,15 @@ export default function HomePage() {
             </div>
 
             <button
-              onClick={() => { unlockAudio(); voiceState === 'idle' && startListening(); }}
-              disabled={voiceState !== 'idle'}
+              onClick={() => {
+                unlockAudio();
+                if (voiceState === 'listening') {
+                  stopAndSend();
+                } else if (voiceState === 'idle') {
+                  startListening();
+                }
+              }}
+              disabled={voiceState !== 'idle' && voiceState !== 'listening'}
               className={`relative flex h-[80px] w-[80px] items-center justify-center rounded-full transition-all ${
                 voiceState === 'listening'
                   ? 'mic-pulse bg-[#FF1B1B] text-white'
