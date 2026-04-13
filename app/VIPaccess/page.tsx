@@ -246,9 +246,26 @@ export default function HomePage() {
       audioRef.current = audio;
 
       await new Promise<void>((resolve) => {
-        audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-        audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
-        audio.play();
+        const timeout = setTimeout(() => { URL.revokeObjectURL(url); resolve(); }, 30000);
+        audio.onended = () => { clearTimeout(timeout); URL.revokeObjectURL(url); resolve(); };
+        audio.onerror = () => { clearTimeout(timeout); URL.revokeObjectURL(url); resolve(); };
+        const playPromise = audio.play();
+        if (playPromise) {
+          playPromise.catch(() => {
+            // Autoplay blocked (iOS Safari) — fall back to browser speech synthesis
+            clearTimeout(timeout);
+            URL.revokeObjectURL(url);
+            if ('speechSynthesis' in window) {
+              const utterance = new SpeechSynthesisUtterance(text);
+              utterance.rate = 1.0;
+              utterance.onend = () => resolve();
+              utterance.onerror = () => resolve();
+              window.speechSynthesis.speak(utterance);
+            } else {
+              resolve();
+            }
+          });
+        }
       });
     } catch (err) {
       console.error('TTS error:', err);
@@ -292,10 +309,26 @@ export default function HomePage() {
   }, [speakText]);
 
   // ─── SPEECH RECOGNITION ───
+  const listeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopListeningTimeout = useCallback(() => {
+    if (listeningTimeoutRef.current) {
+      clearTimeout(listeningTimeoutRef.current);
+      listeningTimeoutRef.current = null;
+    }
+  }, []);
+
   const startListening = useCallback(() => {
+    // Abort any existing recognition first
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch {}
+      recognitionRef.current = null;
+    }
+    stopListeningTimeout();
+
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
-      setError('Speech recognition not supported. Use Chrome.');
+      setError('Speech recognition not supported. Use Chrome or Safari.');
       return;
     }
 
@@ -305,9 +338,18 @@ export default function HomePage() {
     recognition.lang = 'en-US';
     recognitionRef.current = recognition;
 
-    recognition.onstart = () => setVoiceState('listening');
+    recognition.onstart = () => {
+      setVoiceState('listening');
+      // Safety timeout — if listening hangs for 15s, force stop
+      stopListeningTimeout();
+      listeningTimeoutRef.current = setTimeout(() => {
+        try { recognition.stop(); } catch {}
+        setVoiceState('idle');
+      }, 15000);
+    };
 
     recognition.onresult = (event: any) => {
+      stopListeningTimeout();
       const transcript = event.results[0]?.[0]?.transcript;
       if (transcript && scenarioRef.current) {
         postChatAndSpeak(transcript, messagesRef.current, scenarioRef.current);
@@ -315,6 +357,7 @@ export default function HomePage() {
     };
 
     recognition.onerror = (event: any) => {
+      stopListeningTimeout();
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
         setError(`Mic error: ${event.error}`);
       }
@@ -322,11 +365,16 @@ export default function HomePage() {
     };
 
     recognition.onend = () => {
+      stopListeningTimeout();
       setVoiceState((prev) => prev === 'listening' ? 'idle' : prev);
     };
 
-    recognition.start();
-  }, [postChatAndSpeak]);
+    try {
+      recognition.start();
+    } catch {
+      setVoiceState('idle');
+    }
+  }, [postChatAndSpeak, stopListeningTimeout]);
 
   // ─── AUTO-LISTEN after speaking ───
   useEffect(() => {
