@@ -502,9 +502,9 @@ export default function HomePage() {
       <main className="min-h-screen">
         {/* Header */}
         <div className="text-center">
-          <div style={{ background: 'linear-gradient(180deg, #ffffff 0%, #ffffff 60%, #aaaaaa 78%, #333333 90%, #0a0a0a 100%)' }} className="px-4 pb-20 pt-4">
+          <div style={{ background: 'linear-gradient(180deg, #ffffff 0%, #ffffff 55%, #aaaaaa 75%, #333333 88%, #0a0a0a 100%)' }} className="px-4 pb-10 pt-4">
             <div className="mx-auto">
-              <Image src="/logos/csp-logo-transparent.png" alt="Closer Simulator Pro" width={220} height={220} className="mx-auto" priority />
+              <Image src="/logos/csp-logo-transparent.png" alt="Closer Simulator Pro" width={130} height={130} className="mx-auto" priority />
             </div>
           </div>
           <div className="px-4 pt-2">
