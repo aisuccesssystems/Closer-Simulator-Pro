@@ -210,7 +210,19 @@ export default function HomePage() {
 
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const iosAudioRef = useRef<HTMLAudioElement | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
+
+  // Unlock iOS audio on first user gesture
+  const unlockAudio = useCallback(() => {
+    if (!iosAudioRef.current) {
+      const audio = new Audio();
+      audio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYlppOmAAAAAAD/+1DEAAAHAAGf9AAAIgAANIAAAARMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7UMQbg8AAAaQAAAAgAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+      audio.load();
+      audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(() => {});
+      iosAudioRef.current = audio;
+    }
+  }, []);
   const messagesRef = useRef<Message[]>([]);
   const scenarioRef = useRef<string | null>(null);
   const autoListenRef = useRef(true);
@@ -232,6 +244,9 @@ export default function HomePage() {
   // ─── TTS ───
   const speakText = useCallback(async (text: string): Promise<void> => {
     setVoiceState('speaking');
+
+    // Try OpenAI TTS first
+    let audioPlayed = false;
     try {
       const res = await fetch('/api/speak', {
         method: 'POST',
@@ -242,7 +257,10 @@ export default function HomePage() {
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
+
+      // Reuse iOS-unlocked audio element if available, otherwise create new
+      const audio = iosAudioRef.current || new Audio();
+      audio.src = url;
       audioRef.current = audio;
 
       await new Promise<void>((resolve) => {
@@ -251,25 +269,35 @@ export default function HomePage() {
         audio.onerror = () => { clearTimeout(timeout); URL.revokeObjectURL(url); resolve(); };
         const playPromise = audio.play();
         if (playPromise) {
-          playPromise.catch(() => {
-            // Autoplay blocked (iOS Safari) — fall back to browser speech synthesis
+          playPromise.then(() => { audioPlayed = true; }).catch(() => {
             clearTimeout(timeout);
             URL.revokeObjectURL(url);
-            if ('speechSynthesis' in window) {
-              const utterance = new SpeechSynthesisUtterance(text);
-              utterance.rate = 1.0;
-              utterance.onend = () => resolve();
-              utterance.onerror = () => resolve();
-              window.speechSynthesis.speak(utterance);
-            } else {
-              resolve();
-            }
+            resolve();
           });
         }
       });
+      if (audioPlayed) { setVoiceState('idle'); return; }
     } catch (err) {
       console.error('TTS error:', err);
     }
+
+    // Fallback: browser speech synthesis (works on iOS without user gesture)
+    try {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        await new Promise<void>((resolve) => {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.rate = 1.0;
+          utterance.onend = () => resolve();
+          utterance.onerror = () => resolve();
+          setTimeout(() => resolve(), 15000); // safety timeout
+          window.speechSynthesis.speak(utterance);
+        });
+      }
+    } catch (err) {
+      console.error('Fallback TTS error:', err);
+    }
+
     setVoiceState('idle');
   }, []);
 
@@ -481,6 +509,7 @@ export default function HomePage() {
   // ─── START SESSION ───
   const startSession = (diff: Difficulty) => {
     if (!selectedScenario) return;
+    unlockAudio(); // Unlock iOS audio from user gesture
     setDifficulty(diff);
     setScenario(selectedScenario);
     setScoreData(scoreInitial);
@@ -753,7 +782,7 @@ export default function HomePage() {
             </div>
 
             <button
-              onClick={() => voiceState === 'idle' && startListening()}
+              onClick={() => { unlockAudio(); voiceState === 'idle' && startListening(); }}
               disabled={voiceState !== 'idle'}
               className={`relative flex h-[80px] w-[80px] items-center justify-center rounded-full transition-all ${
                 voiceState === 'listening'
