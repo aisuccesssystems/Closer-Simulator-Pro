@@ -437,14 +437,18 @@ export default function HomePage() {
     return (
       <main className="min-h-screen">
         {/* Header */}
-        <div style={{ background: 'linear-gradient(180deg, #1a0000 0%, #0a0a0a 100%)' }} className="px-4 pb-8 pt-10 text-center">
-          <div className="mx-auto mb-4">
-            <Image src="/logos/csp-logo.png" alt="Closer Simulator Pro" width={180} height={180} className="mx-auto" priority />
+        <div className="text-center">
+          <div style={{ background: 'linear-gradient(180deg, #ffffff 0%, #e0e0e0 40%, #2a2a2a 75%, #0a0a0a 100%)' }} className="px-4 pb-12 pt-10">
+            <div className="mx-auto mb-4">
+              <Image src="/logos/csp-logo.png" alt="Closer Simulator Pro" width={180} height={180} className="mx-auto" priority />
+            </div>
           </div>
-          <p className="mt-2 text-[14px] text-[#666]">
-            Elite real estate roleplay coaching &bull; No fluff. Brutal love.
-          </p>
-          <div className="mx-auto mt-4 h-[2px] w-12 bg-[#FF1B1B]" />
+          <div className="px-4 pt-2">
+            <p className="text-[14px] text-[#666]">
+              Elite real estate roleplay coaching &bull; No fluff. Brutal love.
+            </p>
+            <div className="mx-auto mt-4 h-[2px] w-12 bg-[#FF1B1B]" />
+          </div>
         </div>
 
         <div className="mx-auto max-w-[520px] px-4 pb-10">
