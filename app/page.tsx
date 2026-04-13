@@ -57,6 +57,69 @@ const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; emoji: string; desc
   savage: { label: 'SAVAGE', emoji: '🔴', description: 'Extremely skeptical. Combative. Earn every word.', color: '#FF1B1B' },
 };
 
+// ─── SCENARIO SCRIPTS ───
+type ScriptSection = { title: string; color: string; items: string[] };
+type ScenarioScript = { sections: ScriptSection[] };
+
+const SCENARIO_SCRIPTS: Record<string, ScenarioScript> = {
+  FSBO: {
+    sections: [
+      {
+        title: '3 QUESTIONS TO ASK EVERY FSBO',
+        color: '#FF1B1B',
+        items: [
+          'If I brought you a qualified buyer would you be willing to pay a 3% co-op?',
+          'How long are you going to try and sell this home on your own... Before you decide to explore other options?',
+          'In that time frame, if you do decide to explore other options... Do you have a close friend or family member that you would feel obligated to work with? Or will you be interviewing aggressive agents?',
+        ],
+      },
+      {
+        title: 'BRIDGE QUESTIONS',
+        color: '#eab308',
+        items: [
+          'Why are you selling the property?',
+          'How long has it been for sale?',
+          'How did you come up with the price?',
+          'What are you doing to market the property?',
+          'Have you sold a home before?',
+          'Are you getting any showings?',
+          'What is the feedback of the showings?',
+          'Do You Have Time For Everything?',
+          'Are You Familiar With Financing?',
+          'Do You Know How To Negotiate?',
+          'Can You Sell Your Home Without Getting Emotional?',
+          'Are You Always Available?',
+          'Can You Show Buyers How Other Homes Compare?',
+          'Do you know what your home is really worth?',
+          'When you sell this home, where are you moving to?',
+          'When do you have to be moved by?',
+          'How did you determine your listing price?',
+          'Why are you selling the property yourself?',
+          'Did you consider using an agent?',
+          'Did you get the letter I mailed you earlier this week?',
+          'On a scale of 1-10, how important is it for you to sell this property?',
+          'Is there anything you need, or I can help you with?',
+        ],
+      },
+      {
+        title: 'CLOSING STATEMENT — NO APPOINTMENT SET',
+        color: '#22c55e',
+        items: [
+          "I appreciate your time today. I'll be sending you some information that'll be useful in helping you sell the property... Do you mind if I stay in contact?",
+          'Great and all I ask is... if you do decide to explore other options... I want an opportunity to apply for the job of selling your home. Sound good?',
+        ],
+      },
+      {
+        title: 'QUALIFYING QUESTION — APPOINTMENT SET',
+        color: '#3b82f6',
+        items: [
+          "Now, let me ask you something... when we meet... let's say you love everything that I have to say... you agree that my marketing plan will get the job done... You love my Easy Exit Listing Agreement... You see that I can get you top dollar for the property... is there any reason why I could not earn your business tomorrow at three thirty?",
+        ],
+      },
+    ],
+  },
+};
+
 const scoreInitial: ScoreData = {
   finalScore: null, clarity: null, conviction: null, empathy: null, closingPower: null, coachingFeedback: null,
 };
@@ -143,6 +206,7 @@ export default function HomePage() {
   const [autoListen, setAutoListen] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
+  const [showScript, setShowScript] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -712,6 +776,62 @@ export default function HomePage() {
               );
             })}
           </div>
+
+          {/* Script Reference Panel */}
+          {scenario && SCENARIO_SCRIPTS[scenario] && (
+            <div className="mt-3">
+              <button
+                onClick={() => setShowScript(!showScript)}
+                className="flex w-full items-center justify-between rounded-lg border border-[#1f1f1f] bg-[#111] px-4 py-3 transition hover:border-[#FF1B1B33]"
+              >
+                <div className="flex items-center gap-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF1B1B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                  </svg>
+                  <span className="text-[12px] font-bold uppercase tracking-wider text-[#FF1B1B]">
+                    Script Reference
+                  </span>
+                </div>
+                <svg
+                  width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                  className={`transition-transform duration-200 ${showScript ? 'rotate-180' : ''}`}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {showScript && (
+                <div className="mt-2 max-h-[400px] overflow-y-auto rounded-xl border border-[#1f1f1f] bg-[#0a0a0a] p-4 space-y-5">
+                  {SCENARIO_SCRIPTS[scenario].sections.map((section) => (
+                    <div key={section.title}>
+                      <div
+                        className="mb-3 flex items-center gap-2 border-b pb-2"
+                        style={{ borderColor: `${section.color}33` }}
+                      >
+                        <div className="h-2 w-2 rounded-full" style={{ background: section.color }} />
+                        <h4 className="text-[11px] font-black uppercase tracking-widest" style={{ color: section.color }}>
+                          {section.title}
+                        </h4>
+                      </div>
+                      <div className="space-y-2">
+                        {section.items.map((item, i) => (
+                          <div key={i} className="flex gap-3 rounded-lg bg-[#111] px-3 py-2.5 border border-[#1a1a1a]">
+                            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold" style={{ background: `${section.color}22`, color: section.color }}>
+                              {i + 1}
+                            </span>
+                            <p className="text-[12px] leading-relaxed text-[#ccc]">{item}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* End session */}
           <button
