@@ -338,12 +338,12 @@ export default function HomePage() {
 
   // ─── SPEECH RECOGNITION ───
   const listeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const silenceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTranscriptRef = useRef<string>('');
 
-  const stopListeningTimeout = useCallback(() => {
-    if (listeningTimeoutRef.current) {
-      clearTimeout(listeningTimeoutRef.current);
-      listeningTimeoutRef.current = null;
-    }
+  const clearTimers = useCallback(() => {
+    if (listeningTimeoutRef.current) { clearTimeout(listeningTimeoutRef.current); listeningTimeoutRef.current = null; }
+    if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null; }
   }, []);
 
   const startListening = useCallback(() => {
@@ -352,7 +352,8 @@ export default function HomePage() {
       try { recognitionRef.current.abort(); } catch {}
       recognitionRef.current = null;
     }
-    stopListeningTimeout();
+    clearTimers();
+    lastTranscriptRef.current = '';
 
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
@@ -361,31 +362,53 @@ export default function HomePage() {
     }
 
     const recognition = new SpeechRecognitionAPI();
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.lang = 'en-US';
     recognitionRef.current = recognition;
 
     recognition.onstart = () => {
       setVoiceState('listening');
-      // Safety timeout — if listening hangs for 15s, force stop
-      stopListeningTimeout();
+      // Safety timeout — if listening hangs for 20s total, force stop
       listeningTimeoutRef.current = setTimeout(() => {
         try { recognition.stop(); } catch {}
-        setVoiceState('idle');
-      }, 15000);
+      }, 20000);
     };
 
     recognition.onresult = (event: any) => {
-      stopListeningTimeout();
-      const transcript = event.results[0]?.[0]?.transcript;
-      if (transcript && scenarioRef.current) {
-        postChatAndSpeak(transcript, messagesRef.current, scenarioRef.current);
+      // Collect all transcripts
+      let finalTranscript = '';
+      let interimTranscript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript;
+        } else {
+          interimTranscript += result[0].transcript;
+        }
       }
+
+      lastTranscriptRef.current = finalTranscript || interimTranscript;
+
+      // If we got a final result, stop immediately and send
+      if (finalTranscript) {
+        clearTimers();
+        try { recognition.stop(); } catch {}
+        if (scenarioRef.current) {
+          postChatAndSpeak(finalTranscript.trim(), messagesRef.current, scenarioRef.current);
+        }
+        return;
+      }
+
+      // For interim results, reset silence timer — stop after 2s of no new speech
+      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = setTimeout(() => {
+        try { recognition.stop(); } catch {}
+      }, 2000);
     };
 
     recognition.onerror = (event: any) => {
-      stopListeningTimeout();
+      clearTimers();
       if (event.error !== 'no-speech' && event.error !== 'aborted') {
         setError(`Mic error: ${event.error}`);
       }
@@ -393,8 +416,15 @@ export default function HomePage() {
     };
 
     recognition.onend = () => {
-      stopListeningTimeout();
-      setVoiceState((prev) => prev === 'listening' ? 'idle' : prev);
+      clearTimers();
+      // If we have an unsubmitted transcript (from interim results), send it
+      const pending = lastTranscriptRef.current.trim();
+      if (pending && scenarioRef.current) {
+        lastTranscriptRef.current = '';
+        postChatAndSpeak(pending, messagesRef.current, scenarioRef.current);
+      } else {
+        setVoiceState((prev) => prev === 'listening' ? 'idle' : prev);
+      }
     };
 
     try {
@@ -402,7 +432,7 @@ export default function HomePage() {
     } catch {
       setVoiceState('idle');
     }
-  }, [postChatAndSpeak, stopListeningTimeout]);
+  }, [postChatAndSpeak, clearTimers]);
 
   // ─── AUTO-LISTEN after speaking ───
   useEffect(() => {
